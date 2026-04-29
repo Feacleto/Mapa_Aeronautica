@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>CENIPA — Monitoramento e Curadoria de Acidentes Aéreos</title>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand" id="brand-text">Monitoramento e Curadorias de Acidentes Aéreos<span class="sub" id="brand-sub"></span></div>
+  <div class="stats">
+    <div class="stat" id="stat-total-wrap"><b id="stat-total">—</b><i>ocorrências</i></div>
+    <div class="stat" id="stat-filtered-wrap"><b id="stat-filtered">—</b><i>filtradas</i></div>
+    <div class="stat clickable" id="stat-curated-wrap" title="Mostrar apenas ocorrências já curadas"><b id="stat-curated">—</b><i>curadas</i></div>
+    <div class="stat clickable fatal" id="stat-fatal-wrap" title="Mostrar apenas ocorrências com fatalidades"><b id="stat-fatal">—</b><i>fatalidades</i></div>
+  </div>
+</header>
+
+<main>
+  <div class="map-wrap">
+    <div id="map"></div>
+
+    <div class="map-toolbar">
+      <button id="btn-light" class="active">Light</button>
+      <button id="btn-dark">Dark</button>
+    </div>
+
+    <button class="sidebar-toggle" id="sidebar-toggle">≡ Painel</button>
+
+    <div class="focus-banner" id="focus-banner">
+      <span id="focus-banner-text">Modo foco</span>
+      <button id="btn-exit-focus">✕ Sair do foco</button>
+    </div>
+
+    <div class="map-legend" id="map-legend">
+      <div class="legend-item" data-cls="ACIDENTE" title="Mostrar apenas acidentes (clique de novo para restaurar)">
+        <span class="dot" style="background:#e63946"></span>
+        <span class="lbl">Acidente</span>
+        <span class="cnt" data-cnt="ACIDENTE"></span>
+      </div>
+      <div class="legend-item" data-cls="INCIDENTE GRAVE" title="Mostrar apenas incidentes graves (clique de novo para restaurar)">
+        <span class="dot" style="background:#f08c00"></span>
+        <span class="lbl">Incidente Grave</span>
+        <span class="cnt" data-cnt="INCIDENTE GRAVE"></span>
+      </div>
+      <div class="legend-item" data-cls="INCIDENTE" title="Mostrar apenas incidentes (clique de novo para restaurar)">
+        <span class="dot" style="background:#1971c2"></span>
+        <span class="lbl">Incidente</span>
+        <span class="cnt" data-cnt="INCIDENTE"></span>
+      </div>
+      <hr class="legend-divider" />
+      <div class="legend-row"><span class="line"></span> Rota origem → destino</div>
+    </div>
+  </div>
+
+  <aside class="panel" id="panel">
+    <div class="panel-header">
+      <h2>Painel de Controle e Curadoria</h2>
+      <button class="icon-btn" id="btn-close-panel" title="Fechar painel">✕</button>
+    </div>
+
+    <div class="panel-content">
+      <div class="panel-section">
+        <h3>Filtros</h3>
+        <div class="filters">
+          <div class="field">
+            <label for="f-year">Ano</label>
+            <select id="f-year"><option value="">Todos</option></select>
+          </div>
+          <div class="field">
+            <label for="f-uf">Estado (UF)</label>
+            <select id="f-uf"><option value="">Todos</option></select>
+          </div>
+          <div class="field full">
+            <label for="f-model">Modelo da Aeronave (digite para buscar)</label>
+            <div class="autocomplete-wrap">
+              <input type="search" id="f-model" autocomplete="off" placeholder="Ex.: 152, EMB-110, AS350..." />
+              <div class="autocomplete-list" id="f-model-list"></div>
+            </div>
+          </div>
+          <div class="field full">
+            <label for="f-fabricante">Fabricante (digite para buscar)</label>
+            <div class="autocomplete-wrap">
+              <input type="search" id="f-fabricante" autocomplete="off" placeholder="Ex.: EMBRAER, CESSNA, BELL..." />
+              <div class="autocomplete-list" id="f-fabricante-list"></div>
+            </div>
+          </div>
+        </div>
+        <div class="filters-actions">
+          <span id="filter-count">—</span>
+          <button class="btn-link" id="btn-clear">Limpar filtros</button>
+        </div>
+      </div>
+
+      <div class="panel-section detail-section" id="detail-section">
+        <div class="detail-empty" id="detail-empty">
+          <div class="icon">◎</div>
+          Selecione uma ocorrência no mapa<br />ou na lista abaixo
+        </div>
+        <div id="detail-content" style="display:none">
+          <div class="detail-header">
+            <div>
+              <div class="detail-title" id="d-title">—</div>
+              <div class="detail-subtitle" id="d-sub">—</div>
+            </div>
+            <span class="badge" id="d-badge">—</span>
+          </div>
+
+          <div class="info-grid">
+            <div class="it"><div class="lab">Tipo</div><div class="val" id="d-tipo">—</div></div>
+            <div class="it"><div class="lab">Classificação</div><div class="val" id="d-classification">—</div></div>
+            <div class="it"><div class="lab">Data / Hora</div><div class="val" id="d-data">—</div></div>
+            <div class="it"><div class="lab">Aeronaves Envolvidas</div><div class="val" id="d-aircrafts">1</div></div>
+            <div class="it"><div class="lab">Cidade / UF</div><div class="val" id="d-loc">—</div></div>
+            <div class="it"><div class="lab">País</div><div class="val" id="d-country">—</div></div>
+            <div class="it"><div class="lab">Aeródromo</div><div class="val" id="d-aero">—</div></div>
+            <div class="it route full"><div class="lab">Origem → Destino</div><div class="val" id="d-route">—</div></div>
+            <div class="it section full"><div class="lab section-label">Aeronave</div></div>
+            <div class="it"><div class="lab">Equipamento</div><div class="val" id="d-equipment">—</div></div>
+            <div class="it"><div class="lab">Matrícula</div><div class="val" id="d-matricula">—</div></div>
+            <div class="it"><div class="lab">Modelo</div><div class="val" id="d-modelo">—</div></div>
+            <div class="it"><div class="lab">Fabricante</div><div class="val" id="d-fab">—</div></div>
+            <div class="it"><div class="lab">Motor</div><div class="val" id="d-engines">—</div></div>
+            <div class="it"><div class="lab">Ano de Fabricação</div><div class="val" id="d-year">—</div></div>
+            <div class="it"><div class="lab">Peso Máx. Decolagem</div><div class="val" id="d-weight">—</div></div>
+            <div class="it"><div class="lab">Assentos</div><div class="val" id="d-seats">—</div></div>
+            <div class="it"><div class="lab">País de Registro</div><div class="val" id="d-reg-country">—</div></div>
+            <div class="it"><div class="lab">Categoria de Registro</div><div class="val" id="d-reg-category">—</div></div>
+            <div class="it section full"><div class="lab section-label">Operação</div></div>
+            <div class="it full"><div class="lab">Operador / Aviação</div><div class="val" id="d-operador">—</div></div>
+            <div class="it"><div class="lab">Tipo Operação</div><div class="val" id="d-tipo-op">—</div></div>
+            <div class="it"><div class="lab">Fase da Operação</div><div class="val" id="d-phase">—</div></div>
+            <div class="it section full"><div class="lab section-label">Consequências</div></div>
+            <div class="it"><div class="lab">Nível de Dano</div><div class="val" id="d-damage">—</div></div>
+            <div class="it danger"><div class="lab">Fatalidades</div><div class="val" id="d-fat">—</div></div>
+          </div>
+
+          <div id="d-investigation" class="investigation-box" style="display:none">
+            <div class="investigation-header">
+              <h3 class="investigation-title">Investigação</h3>
+              <span id="d-status" class="inv-badge">—</span>
+            </div>
+            <div class="investigation-grid">
+              <div class="it"><div class="lab">Comando Investigador</div><div class="val" id="d-command">—</div></div>
+              <div class="it"><div class="lab">Recomendações Emitidas</div><div class="val" id="d-recommendations">0</div></div>
+              <div class="it full"><div class="lab">Relatório</div><div class="val" id="d-report">—</div></div>
+            </div>
+          </div>
+
+          <div id="d-photo" class="detail-photo" style="display:none"></div>
+
+          <h3 class="curation-title">Curadoria</h3>
+          <div class="curation">
+            <div class="field">
+              <label for="c-narr">Narrativa do Acidente</label>
+              <textarea id="c-narr" placeholder="Descreva o contexto, a sequência de eventos, hipóteses..."></textarea>
+            </div>
+            <div class="field">
+              <label for="c-photo">URL de Fotos (aparece no mapa e no painel)</label>
+              <input type="url" id="c-photo" placeholder="https://..." />
+            </div>
+            <div class="field">
+              <label for="c-link">Links Externos / Relatórios</label>
+              <input type="url" id="c-link" placeholder="https://..." />
+            </div>
+            <div class="btn-row">
+              <button class="btn" id="btn-save">Salvar curadoria</button>
+              <button class="btn btn-secondary" id="btn-clear-curation" type="button">Apagar</button>
+              <span class="save-status" id="save-status">✓ Salvo</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel-section list-section">
+        <h3>
+          <span><span id="list-title">Ocorrências</span> <span id="list-count" class="list-count">(—)</span></span>
+          <span id="list-curated-chip" style="display:none"><span class="filter-chip">Apenas curadas <button id="btn-clear-curated">✕</button></span></span>
+        </h3>
+        <div class="list-wrap" id="list-wrap"></div>
+      </div>
+    </div>
+  </aside>
+</main>
+
+<div class="loader-overlay" id="loader">
+  <div class="spinner"></div>
+  <div>Carregando dados CENIPA...</div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
